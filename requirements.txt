@@ -1,0 +1,9 @@
+langchain
+langchain-anthropic
+langchain-community
+chromadb
+sqlalchemy
+pydantic
+pydantic-settings
+python-dotenv
+pytest
