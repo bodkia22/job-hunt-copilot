@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.config import settings
 from src.models import VacancyRequirements, MatchResult
-
+from src.prompts import COVER_LETTER_HUMAN, COVER_LETTER_SYSTEM
 
 llm = ChatAnthropic(
     model=settings.anthropic_model, # type: ignore
@@ -13,17 +13,8 @@ llm = ChatAnthropic(
 )
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a job applicant writing a cover letter for a position you are "
-     "genuinely interested in. Write in first person, as the candidate. Keep the tone "
-     "professional but warm, not generic or robotic. Length: 3-4 short paragraphs. "
-     "Focus on the candidate's matched skills and relevant experience — do not mention "
-     "missing skills or weaknesses directly, but you may briefly acknowledge a learning "
-     "mindset if there are notable gaps. Do not invent experience, projects, or skills "
-     "that are not present in the provided context. Do not use placeholder brackets like "
-     "[Company Name] — use the actual company name and position title provided."),
-    ("human", "Vacancy:\n{vacancy_text}\n\n"
-     "Match analysis (matched skills, gaps, and overall fit):\n{match_text}\n\n"
-     "Write a cover letter for this position."),
+    ("system", COVER_LETTER_SYSTEM),
+    ("human", COVER_LETTER_HUMAN),
 ])
 
 chain = prompt | llm

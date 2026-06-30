@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.config import settings
 from src.models import VacancyRequirements
-
+from src.prompts import VACANCY_PARSER_HUMAN, VACANCY_PARSER_SYSTEM
 llm = ChatAnthropic(
     model=settings.anthropic_model, # type: ignore
     api_key=settings.anthropic_api_key,
@@ -15,8 +15,8 @@ llm = ChatAnthropic(
 structured_llm = llm.with_structured_output(VacancyRequirements)
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert at parsing job vacancy postings into structured data."),
-    ("human", "Parse the following vacancy:\n\n{vacancy_text}"),
+    ("system", VACANCY_PARSER_SYSTEM),
+    ("human", VACANCY_PARSER_HUMAN),
 ])
 
 chain = prompt | structured_llm
