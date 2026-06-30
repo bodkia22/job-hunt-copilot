@@ -61,3 +61,5 @@ dmypy.json
 # Project-specific
 data/chroma/
 *.db
+
+output/
