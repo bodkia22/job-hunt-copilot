@@ -47,3 +47,28 @@ class VacancyRequirements(BaseModel):
         "stated. Use the most relevant/primary skill's required years if multiple are "
         "listed. Null if not specified.",
     )
+
+class MatchResult(BaseModel):
+    match_percentage: int = Field(
+        ge=0, le=100,
+        description="Overall fit score from 0 to 100, based on how well the candidate's "
+        "CV matches the vacancy's required and nice-to-have skills."
+    )
+    is_good_fit: bool = Field(
+        description="Whether the candidate is realistically a good fit for this position, "
+        "considering both matched skills and any disqualifying gaps."
+    )
+    matched_skills: list[str] = Field(
+        description="Skills/technologies from the vacancy's requirements that are clearly "
+        "present in the candidate's CV."
+    )
+    missing_skills: list[str] = Field(
+        description="Skills/technologies required or preferred by the vacancy that are NOT "
+        "found in the candidate's CV."
+    )
+    red_flags: list[str] = Field(
+        default_factory=list,
+        description="Hard disqualifiers explicitly stated in the vacancy that the candidate "
+        "clearly does not meet, e.g. a required language level, a mandatory certification, "
+        "or a minimum years-of-experience threshold the candidate falls short of."
+    )
