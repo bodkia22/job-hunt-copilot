@@ -63,3 +63,6 @@ data/chroma/
 *.db
 
 output/
+
+data/cv.md
+inbox/vacancy.txt
