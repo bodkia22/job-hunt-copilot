@@ -7,3 +7,7 @@ pydantic
 pydantic-settings
 python-dotenv
 pytest
+langchain-chroma
+langchain-text-splitters
+langchain-huggingface
+sentence-transformers
