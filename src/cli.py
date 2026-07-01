@@ -7,6 +7,8 @@ from src.cover_letter import generate_cover_letter
 from src.db import init_db, save_application
 
 def main() -> None:
+    print("=== JOB HUNT COPILOT ===")
+    print("initializing database...")
     init_db()
     
     vacancy_text = load_vacancy_text(settings.vacancy_path)

@@ -1,5 +1,5 @@
 """SQLAlchemy models and session management for storing application history."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, String, Integer, Boolean, DateTime, func, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
@@ -21,7 +21,7 @@ class ApplicationRecord(Base):
     is_good_fit: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[str] = mapped_column(String, default="new")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
     )
     cover_letter_text: Mapped[str] = mapped_column(Text)
