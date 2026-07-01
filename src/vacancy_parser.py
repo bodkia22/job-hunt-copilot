@@ -1,11 +1,13 @@
 """Parse a vacancy text file into a structured VacancyRequirements model."""
 from pathlib import Path
+from typing import cast
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.config import settings
 from src.models import VacancyRequirements
 from src.prompts import VACANCY_PARSER_HUMAN, VACANCY_PARSER_SYSTEM
+
 llm = ChatAnthropic(
     model=settings.anthropic_model, # type: ignore
     api_key=settings.anthropic_api_key,
@@ -22,12 +24,11 @@ prompt = ChatPromptTemplate.from_messages([
 chain = prompt | structured_llm
 
 def parse_vacancy(text: str) -> VacancyRequirements:
-    return chain.invoke({"vacancy_text": text}) # type: ignore
+    return cast(VacancyRequirements, chain.invoke({"vacancy_text": text}))
 
 def load_vacancy_text(path: Path) -> str:
     with open(path, "r", encoding="utf-8") as file:
-        content = file.read()
-        return content
+        return file.read()
 
 if __name__ == "__main__":
     vacancy_text = load_vacancy_text(settings.vacancy_path)

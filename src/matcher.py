@@ -28,7 +28,7 @@ def match_cv_to_vacancy(vacancy: VacancyRequirements, cv_text: str) -> MatchResu
     vacancy_text = vacancy.model_dump_json(indent=2)
     result = chain.invoke({"vacancy_text": vacancy_text, "cv_text": cv_text})
 
-    return result # type: ignore
+    return cast(MatchResult, result) 
 
 
 if __name__ == "__main__":
