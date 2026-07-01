@@ -10,12 +10,14 @@ from src.config import settings
 
 
 def load_cv_text(path: Path) -> str:
+    """Read and return the CV file contents as a string."""
     with open(path, "r", encoding="utf-8") as file:
         result = file.read()
         return result
 
 
 def chunk_cv(text: str) -> list[Document]:
+    """Split CV text into overlapping chunks suitable for embedding."""
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
         chunk_overlap=100,
@@ -24,6 +26,7 @@ def chunk_cv(text: str) -> list[Document]:
 
 
 def get_vector_store() -> Chroma:
+    """Initialize and return a Chroma vector store backed by HuggingFace sentence embeddings."""
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -34,6 +37,7 @@ def get_vector_store() -> Chroma:
 
 
 def build_cv_index() -> None:
+    """Load the CV, clear any existing index, and re-index all chunks into ChromaDB."""
     text = load_cv_text(settings.cv_path)
     chunks = chunk_cv(text)
     vector_store = get_vector_store()

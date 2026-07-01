@@ -8,10 +8,12 @@ from src.config import settings
 
 
 class Base(DeclarativeBase):
-    pass
+    """SQLAlchemy declarative base class."""
 
 
 class ApplicationRecord(Base):
+    """ORM model representing a job application record stored in the database."""
+
     __tablename__ = "applications"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -30,6 +32,7 @@ engine = create_engine(f"sqlite:///{settings.db_path}")
 SessionLocal = sessionmaker(bind=engine)
 
 def init_db() -> None:
+    """Create all database tables if they do not already exist."""
     Base.metadata.create_all(engine)
 
 def save_application(
@@ -39,6 +42,15 @@ def save_application(
     is_good_fit: bool,
     cover_letter_text: str,
 ) -> None:
+    """Persist a job application record to the database.
+
+    Args:
+        company_name: Name of the hiring company.
+        position_title: Title of the applied position.
+        match_percentage: CV-to-vacancy fit score (0–100).
+        is_good_fit: Whether the candidate is considered a good fit.
+        cover_letter_text: Generated cover letter content.
+    """
     with SessionLocal() as session:
         record = ApplicationRecord(
             company_name=company_name,

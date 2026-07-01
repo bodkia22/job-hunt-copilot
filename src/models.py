@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class VacancyRequirements(BaseModel):
+    """Structured representation of requirements extracted from a job vacancy posting."""
+
     company_name: str = Field(
         description="The hiring company's name, exactly as stated in the posting."
     )
@@ -49,6 +51,8 @@ class VacancyRequirements(BaseModel):
     )
 
 class MatchResult(BaseModel):
+    """Result of matching a candidate's CV against a vacancy's requirements."""
+
     match_percentage: int = Field(
         ge=0, le=100,
         description="Overall fit score from 0 to 100, based on how well the candidate's "

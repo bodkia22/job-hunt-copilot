@@ -25,6 +25,15 @@ chain = prompt | structured_llm
 
 
 def match_cv_to_vacancy(vacancy: VacancyRequirements, cv_text: str) -> MatchResult:
+    """Evaluate how well the candidate's CV matches the given vacancy requirements.
+
+    Args:
+        vacancy: Structured vacancy requirements extracted from the job posting.
+        cv_text: Full text of the candidate's CV.
+
+    Returns:
+        A MatchResult with fit score, matched/missing skills, and red flags.
+    """
     vacancy_text = vacancy.model_dump_json(indent=2)
     result = chain.invoke({"vacancy_text": vacancy_text, "cv_text": cv_text})
 

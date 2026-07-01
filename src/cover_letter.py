@@ -21,6 +21,18 @@ chain = prompt | llm
 
 
 def generate_cover_letter(vacancy: VacancyRequirements, match_result: MatchResult) -> str:
+    """Generate a personalized cover letter based on the vacancy and match analysis.
+
+    Args:
+        vacancy: Structured vacancy requirements extracted from the job posting.
+        match_result: Result of matching the CV against the vacancy.
+
+    Returns:
+        The cover letter as a plain string.
+
+    Raises:
+        ValueError: If the LLM response content is not a plain string.
+    """
     vacancy_text = vacancy.model_dump_json(indent=2)
 
     result = chain.invoke({"vacancy_text": vacancy_text, "match_text" : match_result.model_dump_json(indent=2)})

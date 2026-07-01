@@ -7,6 +7,7 @@ from src.cover_letter import generate_cover_letter
 from src.db import init_db, save_application
 
 def main() -> None:
+    """Run the full pipeline: parse vacancy, match CV, generate and save cover letter."""
     print("=== JOB HUNT COPILOT ===")
     print("initializing database...")
     init_db()

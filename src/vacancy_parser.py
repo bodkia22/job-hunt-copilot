@@ -24,9 +24,11 @@ prompt = ChatPromptTemplate.from_messages([
 chain = prompt | structured_llm
 
 def parse_vacancy(text: str) -> VacancyRequirements:
+    """Send vacancy text to the LLM and return structured requirements."""
     return cast(VacancyRequirements, chain.invoke({"vacancy_text": text}))
 
 def load_vacancy_text(path: Path) -> str:
+    """Read and return the vacancy file contents as a string."""
     with open(path, "r", encoding="utf-8") as file:
         return file.read()
 
