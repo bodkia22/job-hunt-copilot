@@ -1,12 +1,10 @@
 """SQLAlchemy models and session management for storing application history."""
 from datetime import datetime
-from pathlib import Path
 
-from sqlalchemy import create_engine, String, Integer, Boolean, DateTime
+from sqlalchemy import create_engine, String, Integer, Boolean, DateTime, func, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from src.config import settings
-from sqlalchemy import Text
 
 
 class Base(DeclarativeBase):
@@ -22,16 +20,17 @@ class ApplicationRecord(Base):
     match_percentage: Mapped[int] = mapped_column(Integer)
     is_good_fit: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[str] = mapped_column(String, default="new")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
     cover_letter_text: Mapped[str] = mapped_column(Text)
 
-
-
 engine = create_engine(f"sqlite:///{settings.db_path}")
-
-Base.metadata.create_all(engine)
-
 SessionLocal = sessionmaker(bind=engine)
+
+def init_db() -> None:
+    Base.metadata.create_all(engine)
 
 def save_application(
     company_name: str,
