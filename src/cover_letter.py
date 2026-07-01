@@ -20,11 +20,14 @@ prompt = ChatPromptTemplate.from_messages([
 chain = prompt | llm
 
 
-def generate_cover_letter(vacancy: VacancyRequirements, match: MatchResult) -> str:
+def generate_cover_letter(vacancy: VacancyRequirements, match_result: MatchResult) -> str:
     vacancy_text = vacancy.model_dump_json(indent=2)
 
-    result = chain.invoke({"vacancy_text": vacancy_text, "match_text" : match})
-    return result.content # type: ignore
+    result = chain.invoke({"vacancy_text": vacancy_text, "match_text" : match_result.model_dump_json(indent=2)})
+    content = result.content
+    if not isinstance(content, str):
+        raise ValueError(f"Expected str response, got {type(content)}")
+    return content
 
 
 if __name__ == "__main__":
@@ -35,7 +38,7 @@ if __name__ == "__main__":
     vacancy_text = load_vacancy_text(settings.vacancy_path)
     vacancy = parse_vacancy(vacancy_text)
     cv_text = load_cv_text(settings.cv_path)
-    match = match_cv_to_vacancy(vacancy, cv_text)
+    match_result = match_cv_to_vacancy(vacancy, cv_text)
 
-    letter = generate_cover_letter(vacancy, match)
+    letter = generate_cover_letter(vacancy, match_result)
     print(letter)
