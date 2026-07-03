@@ -4,12 +4,18 @@ from typing import Callable, Any
 
 from anthropic import APIError, RateLimitError, APIConnectionError
 from langchain_core.exceptions import OutputParserException
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.exceptions import LLMCallError, LLMRateLimitError, LLMConnectionError, LLMOutputError
 
 logger = logging.getLogger(__name__)
 
-
+@retry(
+    retry=retry_if_exception_type(RateLimitError),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
 def invoke_chain_safely(chain_invoke_fn: Callable[[], Any], context: str) -> Any:
     """Invoke a LangChain chain and translate low-level errors into clear exceptions.
 
