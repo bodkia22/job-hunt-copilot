@@ -22,6 +22,13 @@ the Anthropic Claude API, targeting Junior AI Engineer roles.
   letter text) to a local SQLite database via SQLAlchemy 2.0
 - **CV indexing** — chunks and embeds the CV into a local ChromaDB vector store
   using HuggingFace sentence-transformers (no paid embedding API required)
+- **Structured error handling** — raw Anthropic/LangChain exceptions are translated
+  into a small custom exception hierarchy so callers can react to specific failure
+  modes (rate limit, connection issue, bad structured output) instead of catching
+  generic `Exception`
+- **Colorized logging** — every module logs through the standard `logging` module;
+  `main.py` wires it to a `rich.logging.RichHandler` for readable, color-coded
+  console output and pretty tracebacks
 
 ---
 
@@ -35,6 +42,9 @@ cv.md ────────────────────────�
                              cover_letter.py ──► cover letter text
                                             │
                                         db.py ──► jobs.db
+
+                     (all chain calls routed through llm_utils.py,
+                      which raises typed exceptions from exceptions.py)
 ```
 
 | Module | Responsibility |
@@ -42,12 +52,15 @@ cv.md ────────────────────────�
 | `config.py` | Pydantic Settings — loads `.env`, exposes typed paths and `SecretStr` API key |
 | `models.py` | `VacancyRequirements` and `MatchResult` Pydantic models used for structured LLM output |
 | `prompts.py` | All system and human prompt templates, centralized and separated from chain logic |
+| `exceptions.py` | Custom exception hierarchy (`LLMCallError` and subclasses) for LLM failure modes |
+| `llm_utils.py` | `invoke_chain_safely()` — wraps every chain call, logs and translates raw Anthropic/LangChain errors into `exceptions.py` types |
 | `vacancy_parser.py` | LCEL chain: `ChatPromptTemplate | llm.with_structured_output(VacancyRequirements)` |
 | `cv_store.py` | CV chunking, HuggingFace embeddings, ChromaDB indexing |
 | `matcher.py` | LCEL chain: full CV text passed to Claude, returns `MatchResult` |
 | `cover_letter.py` | LCEL chain: free-text generation from vacancy + match result |
 | `db.py` | SQLAlchemy 2.0 ORM — persists application records to SQLite |
-| `cli.py` | Pipeline entry point — orchestrates all modules end to end |
+| `cli.py` | Pipeline entry point — orchestrates all modules end to end, logs the run, and maps exceptions to user-facing error messages |
+| `main.py` | Process entry point — configures colorized logging (`RichHandler`) before calling `cli.main()` |
 
 ---
 
@@ -59,6 +72,8 @@ job-hunt-copilot/
 │   ├── config.py
 │   ├── models.py
 │   ├── prompts.py
+│   ├── exceptions.py
+│   ├── llm_utils.py
 │   ├── vacancy_parser.py
 │   ├── cv_store.py
 │   ├── matcher.py
@@ -147,28 +162,34 @@ python main.py
 The tool will:
 1. Parse the vacancy into structured data
 2. Match it against your CV
-3. Print the match score, matched/missing skills, and any red flags
-4. Generate a cover letter and print it to stdout
+3. Log the match score, matched/missing skills, and any red flags
+4. Generate a cover letter and log it
 5. Save the cover letter to `output/cover_letter.txt`
 6. Persist the application record to `data/jobs.db`
+
+All progress is reported through the standard `logging` module, rendered by
+`rich.logging.RichHandler` — each line is timestamped and color-coded by level
+(`INFO` in the default color, `WARNING` in yellow for red flags, `ERROR` in red
+for failures).
 
 ### Example output
 
 ```
-=== JOB HUNT COPILOT ===
-initializing database...
+2026-07-03 16:20:11 INFO     src.cli: === JOB HUNT COPILOT ===
+2026-07-03 16:20:11 INFO     src.vacancy_parser: Parsed vacancy: Acme Corp — Junior AI Engineer
+2026-07-03 16:20:13 INFO     src.matcher: Match score: 78% | Good fit: True
+2026-07-03 16:20:13 INFO     src.cli: Matched skills: Python, LangChain, FastAPI, PostgreSQL
+2026-07-03 16:20:13 INFO     src.cli: Missing skills: Kubernetes, Go
+2026-07-03 16:20:16 INFO     src.cover_letter: Generated cover letter (842 chars)
+2026-07-03 16:20:16 INFO     src.cli: Saved to output/cover_letter.txt
+2026-07-03 16:20:16 INFO     src.db: Saved application record id=1 for Acme Corp — Junior AI Engineer
+```
 
-=== MATCH RESULT: Acme Corp — Junior AI Engineer ===
-Score: 78% | Good fit: True
+If a vacancy has red flags, they are logged at `WARNING` level:
 
-Matched skills: Python, LangChain, FastAPI, PostgreSQL
-Missing skills: Kubernetes, Go
-
-=== COVER LETTER ===
-
-Dear Hiring Team at Acme Corp, ...
-
-(saved to output/cover_letter.txt)
+```
+2026-07-03 16:20:13 WARNING  src.cli: Red flags:
+2026-07-03 16:20:13 WARNING  src.cli:   - Requires on-call rotation not mentioned in CV
 ```
 
 ---
@@ -203,6 +224,47 @@ running locally. This means:
 The tradeoff is a one-time ~90 MB model download and slightly lower embedding
 quality compared to Voyage AI or OpenAI embeddings. For a single-user local tool
 this is an acceptable tradeoff.
+
+### Error handling: a typed exception hierarchy instead of bare `Exception`
+
+Every LLM chain invocation goes through `invoke_chain_safely()` in `llm_utils.py`,
+which catches the low-level `anthropic`/`langchain_core` exceptions and re-raises
+them as one of the types in `exceptions.py`:
+
+| Exception | Raised when | Base |
+|---|---|---|
+| `LLMRateLimitError` | Anthropic API rate limit exceeded | `LLMCallError` |
+| `LLMConnectionError` | Connection to the Anthropic API fails | `LLMCallError` |
+| `LLMOutputError` | LLM response fails structured-output parsing | `LLMCallError` |
+| `LLMCallError` | Any other unexpected API error (base class, also used directly) | `Exception` |
+
+This keeps the failure modes explicit and catchable by name instead of forcing
+every caller to inspect a generic `Exception` message. `cli.py` catches each
+type separately at the top of the pipeline and logs an actionable message
+without crashing the process; a final `except Exception` remains as a safety
+net for anything truly unexpected, logged with a full traceback via
+`logger.exception(...)`.
+
+### Logging instead of `print`
+
+All modules log through `logging.getLogger(__name__)` rather than calling
+`print()`. This was a deliberate refactor with two goals:
+
+- **Log at the source, not just in `main`.** Each module logs its own
+  milestones and errors (e.g. `matcher.py` logs the computed match score,
+  `db.py` logs the saved record id, `llm_utils.py` logs the raw error before
+  translating it). This means the logs are useful even when a module is run
+  standalone via its own `if __name__ == "__main__":` block, not only through
+  the full `cli.py` pipeline.
+- **`cli.py` only logs what's unique to orchestration** — the pipeline banner,
+  the user-facing skills/red-flags summary, the generated cover letter, and
+  the final exception mapping — instead of duplicating what the underlying
+  functions already logged.
+
+`main.py` configures the root logger once, at process start, with a
+`rich.logging.RichHandler`. This gives color-coded, timestamped console output
+(and readable tracebacks) without any module needing to know how logging is
+displayed — modules just log; `main.py` decides how that looks.
 
 ### Temperature settings
 
@@ -246,4 +308,5 @@ so no API calls or local models are needed to run the test suite.
 | Vector store | [ChromaDB](https://www.trychroma.com/) via `langchain-chroma` |
 | Embeddings | [HuggingFace sentence-transformers](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) |
 | Database | SQLite via [SQLAlchemy 2.0](https://docs.sqlalchemy.org/) |
+| Logging | Standard `logging` module + [Rich](https://rich.readthedocs.io/) (`RichHandler`) for colorized console output |
 | Testing | [pytest](https://pytest.org/) |
