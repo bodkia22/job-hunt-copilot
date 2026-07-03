@@ -1,4 +1,5 @@
 """Load CV, split into chunks, embed, and store in ChromaDB."""
+import logging
 from pathlib import Path
 
 from langchain_chroma import Chroma
@@ -7,6 +8,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def load_cv_text(path: Path) -> str:
@@ -42,12 +45,13 @@ def build_cv_index() -> None:
     chunks = chunk_cv(text)
     vector_store = get_vector_store()
 
+    logger.debug("Clearing existing CV index at %s", settings.chroma_persist_dir)
     vector_store.delete_collection()
     vector_store = get_vector_store()
 
     ids = [f"cv-chunk-{i}" for i in range(len(chunks))]
     vector_store.add_documents(documents=chunks, ids=ids)
-    print(f"Indexed {len(chunks)} chunks into {settings.chroma_persist_dir}")
+    logger.info("Indexed %d chunks into %s", len(chunks), settings.chroma_persist_dir)
 
 
 if __name__ == "__main__":

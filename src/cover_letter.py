@@ -1,10 +1,15 @@
 """Generate a personalized cover letter based on vacancy requirements and match result."""
+import logging
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.config import settings
 from src.models import VacancyRequirements, MatchResult
 from src.prompts import COVER_LETTER_HUMAN, COVER_LETTER_SYSTEM
+from src.llm_utils import invoke_chain_safely
+
+logger = logging.getLogger(__name__)
 
 llm = ChatAnthropic(
     model=settings.anthropic_model, # type: ignore
@@ -33,12 +38,18 @@ def generate_cover_letter(vacancy: VacancyRequirements, match_result: MatchResul
     Raises:
         ValueError: If the LLM response content is not a plain string.
     """
+    logger.info("Generating cover letter for %s — %s", vacancy.company_name, vacancy.position_title)
     vacancy_text = vacancy.model_dump_json(indent=2)
 
-    result = chain.invoke({"vacancy_text": vacancy_text, "match_text" : match_result.model_dump_json(indent=2)})
+    result = invoke_chain_safely(
+        lambda: chain.invoke({"vacancy_text": vacancy_text, "match_text" : match_result.model_dump_json(indent=2)}),
+        context="generating cover letter",
+    )
     content = result.content
     if not isinstance(content, str):
+        logger.error("Expected str response from cover letter chain, got %s", type(content))
         raise ValueError(f"Expected str response, got {type(content)}")
+    logger.info("Generated cover letter (%d chars)", len(content))
     return content
 
 

@@ -1,10 +1,13 @@
 """SQLAlchemy models and session management for storing application history."""
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, String, Integer, Boolean, DateTime, func, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -33,6 +36,7 @@ SessionLocal = sessionmaker(bind=engine)
 
 def init_db() -> None:
     """Create all database tables if they do not already exist."""
+    logger.debug("Initializing database at %s", settings.db_path)
     Base.metadata.create_all(engine)
 
 def save_application(
@@ -61,3 +65,9 @@ def save_application(
         )
         session.add(record)
         session.commit()
+        logger.info(
+            "Saved application record id=%d for %s — %s",
+            record.id,
+            company_name,
+            position_title,
+        )
