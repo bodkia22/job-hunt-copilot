@@ -18,6 +18,7 @@ FAKE_VACANCY = VacancyRequirements(
 FAKE_MATCH = MatchResult(
     match_percentage=75,
     is_good_fit=True,
+    role_alignment=True,
     matched_skills=["Python"],
     missing_skills=[],
     red_flags=[],

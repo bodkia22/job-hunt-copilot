@@ -17,11 +17,15 @@ the Anthropic Claude API, targeting Junior AI Engineer roles.
 - **CV matching** — scores the candidate's CV against vacancy requirements and
   returns matched skills, missing skills, and hard disqualifiers
 - **Cover letter generation** — produces a personalized, professional cover letter
-  based on the match analysis
+  based on the match analysis, drawing on the full CV text for concrete details
+  and matching the vacancy's language
 - **Application history** — persists every run (company, position, score, cover
   letter text) to a local SQLite database via SQLAlchemy 2.0
 - **CV indexing** — chunks and embeds the CV into a local ChromaDB vector store
   using HuggingFace sentence-transformers (no paid embedding API required)
+- **Automatic retry with backoff** — transient failures (rate limits, connection
+  errors) are retried up to 3 times with exponential backoff via `tenacity` before
+  being surfaced as an error
 - **Structured error handling** — raw Anthropic/LangChain exceptions are translated
   into a small custom exception hierarchy so callers can react to specific failure
   modes (rate limit, connection issue, bad structured output) instead of catching
@@ -38,13 +42,14 @@ the Anthropic Claude API, targeting Junior AI Engineer roles.
 vacancy.txt ──► vacancy_parser.py ──► VacancyRequirements
                                             │
 cv.md ─────────────────────────────► matcher.py ──► MatchResult
-                                            │
-                             cover_letter.py ──► cover letter text
+      │                                     │
+      └─────────────────────────► cover_letter.py ──► cover letter text
                                             │
                                         db.py ──► jobs.db
 
                      (all chain calls routed through llm_utils.py,
-                      which raises typed exceptions from exceptions.py)
+                      which retries transient failures and raises
+                      typed exceptions from exceptions.py)
 ```
 
 | Module | Responsibility |
@@ -53,11 +58,11 @@ cv.md ────────────────────────�
 | `models.py` | `VacancyRequirements` and `MatchResult` Pydantic models used for structured LLM output |
 | `prompts.py` | All system and human prompt templates, centralized and separated from chain logic |
 | `exceptions.py` | Custom exception hierarchy (`LLMCallError` and subclasses) for LLM failure modes |
-| `llm_utils.py` | `invoke_chain_safely()` — wraps every chain call, logs and translates raw Anthropic/LangChain errors into `exceptions.py` types |
+| `llm_utils.py` | `invoke_chain_safely()` — wraps every chain call, retries transient errors (`tenacity`), logs and translates raw Anthropic/LangChain errors into `exceptions.py` types |
 | `vacancy_parser.py` | LCEL chain: `ChatPromptTemplate | llm.with_structured_output(VacancyRequirements)` |
 | `cv_store.py` | CV chunking, HuggingFace embeddings, ChromaDB indexing |
 | `matcher.py` | LCEL chain: full CV text passed to Claude, returns `MatchResult` |
-| `cover_letter.py` | LCEL chain: free-text generation from vacancy + match result |
+| `cover_letter.py` | LCEL chain: free-text generation from vacancy + match result + full CV text |
 | `db.py` | SQLAlchemy 2.0 ORM — persists application records to SQLite |
 | `cli.py` | Pipeline entry point — orchestrates all modules end to end, logs the run, and maps exceptions to user-facing error messages |
 | `main.py` | Process entry point — configures colorized logging (`RichHandler`) before calling `cli.main()` |
@@ -225,11 +230,52 @@ The tradeoff is a one-time ~90 MB model download and slightly lower embedding
 quality compared to Voyage AI or OpenAI embeddings. For a single-user local tool
 this is an acceptable tradeoff.
 
+### Separating role fit from skill fit in `MatchResult`
+
+`MatchResult` splits "is this the right *type* of role" from "does the
+candidate have the specific required skills" into two independent fields:
+
+- `role_alignment` — true if the position is fundamentally the kind of role
+  the candidate is targeting (e.g. Python backend / AI engineering), regardless
+  of how many specific frameworks match.
+- `is_good_fit` — true only if the candidate meets enough of the *specific*
+  technical requirements, independent of role type.
+
+A Python backend vacancy missing a couple of libraries can be `role_alignment=True,
+is_good_fit=False`; a web-scraping-only or QA vacancy is `role_alignment=False`
+even if some listed tools overlap. Collapsing these into one score would hide
+which of the two problems (wrong role vs. skill gap) actually applies.
+
+### Modeling "or" requirements as skill alternatives
+
+`VacancyRequirements.required_skill_alternatives` captures groups of
+interchangeable skills — but only when the posting uses an explicit
+alternative word ("or", "або", "чи", "либо"), e.g. "Django or FastAPI"
+becomes `["Django", "FastAPI"]`. A skill lives in either `required_skills`
+or one alternatives group, never both, so the matcher doesn't double-count
+or unfairly penalize a candidate for lacking every option in an either/or
+requirement. A plain comma-separated list without such a word (e.g.
+"PostgreSQL, MySQL, MongoDB") is treated as all three being required, and
+stays in `required_skills`.
+
+### Retrying transient failures before giving up
+
+`llm_utils.py` wraps every chain call in a `tenacity`-decorated retry
+(`_invoke_with_retry`) that retries on `RateLimitError` and
+`APIConnectionError` up to 3 attempts with exponential backoff (2s–10s).
+The retry function must let these raw library exceptions propagate
+unmodified — if it caught and re-raised them as a domain exception, tenacity's
+`retry_if_exception_type` check would never see the original type again and
+retries would silently stop working. Only after retries are exhausted does
+`invoke_chain_safely()` translate the failure into a typed exception from
+`exceptions.py`.
+
 ### Error handling: a typed exception hierarchy instead of bare `Exception`
 
 Every LLM chain invocation goes through `invoke_chain_safely()` in `llm_utils.py`,
-which catches the low-level `anthropic`/`langchain_core` exceptions and re-raises
-them as one of the types in `exceptions.py`:
+which retries transient failures, then catches the low-level
+`anthropic`/`langchain_core` exceptions and re-raises them as one of the types
+in `exceptions.py`:
 
 | Exception | Raised when | Base |
 |---|---|---|
@@ -309,4 +355,5 @@ so no API calls or local models are needed to run the test suite.
 | Embeddings | [HuggingFace sentence-transformers](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) |
 | Database | SQLite via [SQLAlchemy 2.0](https://docs.sqlalchemy.org/) |
 | Logging | Standard `logging` module + [Rich](https://rich.readthedocs.io/) (`RichHandler`) for colorized console output |
+| Retry logic | [Tenacity](https://tenacity.readthedocs.io/) — exponential backoff on rate limit / connection errors |
 | Testing | [pytest](https://pytest.org/) |
