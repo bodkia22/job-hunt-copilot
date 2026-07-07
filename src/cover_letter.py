@@ -25,12 +25,13 @@ prompt = ChatPromptTemplate.from_messages([
 chain = prompt | llm
 
 
-def generate_cover_letter(vacancy: VacancyRequirements, match_result: MatchResult) -> str:
+def generate_cover_letter(vacancy: VacancyRequirements, match_result: MatchResult, cv_text: str) -> str:
     """Generate a personalized cover letter based on the vacancy and match analysis.
 
     Args:
         vacancy: Structured vacancy requirements extracted from the job posting.
         match_result: Result of matching the CV against the vacancy.
+        cv_text: Full text of the candidate's CV.
 
     Returns:
         The cover letter as a plain string.
@@ -42,7 +43,7 @@ def generate_cover_letter(vacancy: VacancyRequirements, match_result: MatchResul
     vacancy_text = vacancy.model_dump_json(indent=2)
 
     result = invoke_chain_safely(
-        lambda: chain.invoke({"vacancy_text": vacancy_text, "match_text" : match_result.model_dump_json(indent=2)}),
+        lambda: chain.invoke({"vacancy_text": vacancy_text, "match_text" : match_result.model_dump_json(indent=2), "cv_text": cv_text}),
         context="generating cover letter",
     )
     content = result.content
@@ -63,5 +64,5 @@ if __name__ == "__main__":
     cv_text = load_cv_text(settings.cv_path)
     match_result = match_cv_to_vacancy(vacancy, cv_text)
 
-    letter = generate_cover_letter(vacancy, match_result)
+    letter = generate_cover_letter(vacancy, match_result, cv_text)
     print(letter)

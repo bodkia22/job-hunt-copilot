@@ -33,7 +33,7 @@ def main() -> None:
             for flag in match_result.red_flags:
                 logger.warning("  - %s", flag)
 
-        cover_letter = generate_cover_letter(vacancy_model, match_result)
+        cover_letter = generate_cover_letter(vacancy_model, match_result, cv_text)
 
         logger.info("=== COVER LETTER ===")
         logger.info("\n%s", cover_letter)
